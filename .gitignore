@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment Variables (SENSITIVE!)
+.env
+.env.local
+.env.production
+serviceAccountKey.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Test files (optional - remove if you want to commit)
+test_api.js
+test_flow.js
+
+# Temporary files
+temp/
+tmp/
+ROUTES_FIX.txt
