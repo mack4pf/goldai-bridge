@@ -3,16 +3,17 @@ const { db } = require('../database/firebase');
 
 // You need to set BRIDGE_BOT_TOKEN in .env
 const token = process.env.BRIDGE_BOT_TOKEN;
+if (!token || token === 'YOUR_NEW_BOT_TOKEN') {
+    console.error('❌ CRITICAL: BRIDGE_BOT_TOKEN is missing or invalid!');
+    console.error('   Please set BRIDGE_BOT_TOKEN in Render Environment Variables.');
+}
+
 console.log('DEBUG: Loaded Bot Token:', token ? token.substring(0, 10) + '...' : 'UNDEFINED');
 const bot = new Telegraf(token || 'YOUR_NEW_BOT_TOKEN');
 
 // Middleware to get user from DB
 bot.use(async (ctx, next) => {
     if (!ctx.from) return next();
-
-    const userId = ctx.from.id.toString();
-    // TODO: Fetch user from 'bridge_users' collection
-    // ctx.user = ...
     return next();
 });
 
@@ -27,27 +28,32 @@ bot.start((ctx) => {
 });
 
 bot.command('connect', async (ctx) => {
-    const userId = ctx.from.id.toString();
-    // Generate a simple token
-    const bridgeToken = `BRIDGE-${userId}-${Date.now().toString(36)}`;
+    try {
+        const userId = ctx.from.id.toString();
+        // Generate a simple token
+        const bridgeToken = `BRIDGE-${userId}-${Date.now().toString(36)}`;
 
-    // Save to DB
-    await db.collection('bridge_users').doc(userId).set({
-        telegramId: userId,
-        username: ctx.from.username || 'User',
-        bridgeToken: bridgeToken,
-        riskMode: 'conservative', // Default
-        balance: 0, // Will be updated by EA
-        active: true,
-        createdAt: new Date()
-    }, { merge: true });
+        // Save to DB
+        await db.collection('bridge_users').doc(userId).set({
+            telegramId: userId,
+            username: ctx.from.username || 'User',
+            bridgeToken: bridgeToken,
+            riskMode: 'conservative', // Default
+            balance: 0, // Will be updated by EA
+            active: true,
+            createdAt: new Date()
+        }, { merge: true });
 
-    ctx.reply(
-        `🔑 **Your Bridge Token**\n\n` +
-        `<code>${bridgeToken}</code>\n\n` +
-        `⚠️ Keep this private! Paste it into the GoldAI Bridge EA settings.`,
-        { parse_mode: 'HTML' }
-    );
+        ctx.reply(
+            `🔑 **Your Bridge Token**\n\n` +
+            `<code>${bridgeToken}</code>\n\n` +
+            `⚠️ Keep this private! Paste it into the GoldAI Bridge EA settings.`,
+            { parse_mode: 'HTML' }
+        );
+    } catch (error) {
+        console.error('❌ Error in /connect command:', error);
+        ctx.reply('❌ Error generating token. Please try again later.');
+    }
 });
 
 bot.command('risk', (ctx) => {

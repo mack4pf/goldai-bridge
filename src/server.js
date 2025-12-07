@@ -17,21 +17,23 @@ app.get('/', (req, res) => {
         status: 'online',
         system: 'Gold AI Auto-Trading Bridge',
         version: '2.0',
-        features: [
-            'Monthly Licensing (30 days)',
-            'Test License (5 days) - Key: GOLDAI-TEST-2024',
-            'Advanced Signal Processing',
-            'Watchlist Management',
-            'Daily Profit/Loss Tracking',
-            'Signal Quality Scoring'
-        ],
-        endpoints: {
-            licensing: '/api/v1/license/*',
-            signals: '/api/v1/signals/advanced',
-            watchlist: '/api/v1/watchlist',
-            stats: '/api/v1/stats/daily'
-        },
         timestamp: new Date().toISOString()
+    });
+});
+
+// Debug Endpoint
+app.get('/debug', (req, res) => {
+    res.json({
+        env: {
+            port: process.env.PORT,
+            renderUrl: process.env.RENDER_EXTERNAL_URL ? 'SET' : 'MISSING',
+            botToken: process.env.BRIDGE_BOT_TOKEN ? 'SET' : 'MISSING',
+            firebase: process.env.FIREBASE_PROJECT_ID ? 'SET' : 'MISSING'
+        },
+        bot: {
+            webhookPath: require('./bot/bot').webhookPath || 'POLLING',
+            connected: !!require('./bot/bot').bot
+        }
     });
 });
 
