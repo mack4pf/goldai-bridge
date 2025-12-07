@@ -53,7 +53,6 @@ if (process.env.RENDER_EXTERNAL_URL && botModule.webhookPath) {
 // Start Server
 app.listen(PORT, () => {
     console.log(`🚀 Auto-Bridge Server running on port ${PORT}`);
-    console.log(`📋 Test License: GOLDAI-TEST-2024 (5 days validity)`);
     console.log(`📊 API Documentation: /docs/API.md`);
 });
 

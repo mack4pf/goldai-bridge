@@ -7,9 +7,6 @@ const crypto = require('crypto');
 class LicenseService {
     constructor(db) {
         this.db = db;
-
-        // Test license key (always valid for 5 days from activation)
-        this.TEST_LICENSE_KEY = 'GOLDAI-TEST-2024';
     }
 
     /**
@@ -32,7 +29,8 @@ class LicenseService {
      */
     async activateLicense(userId, licenseKey) {
         try {
-            const isTestLicense = licenseKey === this.TEST_LICENSE_KEY;
+            // Check for test license prefix (GOLDAI-TEST-...)
+            const isTestLicense = licenseKey.startsWith('GOLDAI-TEST-');
             const daysValid = isTestLicense ? 5 : 30;
 
             const activatedAt = new Date();

@@ -15,7 +15,8 @@
 //+------------------------------------------------------------------+
 // IMPORTANT: Replace with your Render URL when deployed
 input string   API_URL = "http://localhost:3001/api/v1";  // Bridge API URL (Change for Render)
-input string   License_Key = "GOLDAI-TEST-2024";           // Your License Key
+input string   License_Key = "";                           // Your License Key (Get from Telegram Bot)
+input string   Bridge_Token = "";                          // Bridge Token from Telegram Bot
 
 input double   Risk_Percent = 6.0;                         // Risk per trade (%)
 input double   Max_Risk_Percent = 8.0;                     // Maximum risk allowed (%)
@@ -74,6 +75,12 @@ int OnInit()
     if(License_Key == "")
     {
         Alert("❌ ERROR: License Key is required!");
+        return INIT_FAILED;
+    }
+
+    if(Bridge_Token == "")
+    {
+        Alert("❌ ERROR: Bridge Token is required! Get it from Telegram Bot /connect");
         return INIT_FAILED;
     }
     
@@ -161,7 +168,7 @@ bool CheckLicense()
     Print("🔑 Checking license...");
     
     string url = API_URL + "/license/check?license=" + License_Key;
-    string headers = "Content-Type: application/json\r\n";
+    string headers = "Content-Type: application/json\r\nx-bridge-token: " + Bridge_Token + "\r\n";
     
     char postData[];
     char result[];
@@ -208,7 +215,7 @@ bool CheckLicense()
 void PollWatchlist()
 {
     string url = API_URL + "/watchlist";
-    string headers = "x-license-key: " + License_Key + "\r\nContent-Type: application/json\r\n";
+    string headers = "x-license-key: " + License_Key + "\r\nx-bridge-token: " + Bridge_Token + "\r\nContent-Type: application/json\r\n";
     
     char postData[];
     char result[];
@@ -443,7 +450,7 @@ void UpdateDailyStats(ulong ticket)
 void ReportStatsUpdate(double balance, double profit)
 {
     string url = API_URL + "/stats/update";
-    string headers = "x-license-key: " + License_Key + "\r\nContent-Type: application/json\r\n";
+    string headers = "x-license-key: " + License_Key + "\r\nx-bridge-token: " + Bridge_Token + "\r\nContent-Type: application/json\r\n";
     
     string body = StringFormat("{\"balance\":%.2f,\"tradeProfit\":%.2f}", balance, profit);
     
