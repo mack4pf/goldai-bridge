@@ -5,13 +5,13 @@ const bodyParser = require('body-parser');
 const { db } = require('./database/firebase');
 
 const app = express();
-const PORT = process.env.PORT || 3001; // Different port from main app (3000)
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
-// Enhanced Health Check
+// Health Check
 app.get('/', (req, res) => {
     res.json({
         status: 'online',
@@ -36,8 +36,17 @@ app.get('/', (req, res) => {
 });
 
 // Import Routes
-const apiRoutes = require('./api/routes_advanced'); // Use advanced routes with license system
+const apiRoutes = require('./api/routes_advanced');
 app.use('/api/v1', apiRoutes);
+
+// Initialize Bot
+const botModule = require('./bot/bot');
+
+// Add webhook endpoint if in production (Render)
+if (process.env.RENDER_EXTERNAL_URL && botModule.webhookPath) {
+    app.use(botModule.webhookPath, botModule.bot.webhookCallback());
+    console.log(`📱 Telegram webhook registered at: ${botModule.webhookPath}`);
+}
 
 // Start Server
 app.listen(PORT, () => {
@@ -46,9 +55,5 @@ app.listen(PORT, () => {
     console.log(`📊 API Documentation: /docs/API.md`);
 });
 
-// Initialize Bot
-require('./bot/bot');
-
-// Start Hourly Signal Scheduler
-const signalScheduler = require('./schedulers/signalScheduler');
-signalScheduler.start();
+// Initialize Signal Scheduler
+require('./schedulers/signalScheduler').start();

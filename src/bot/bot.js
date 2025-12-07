@@ -73,8 +73,29 @@ bot.action('risk_aggressive', async (ctx) => {
     ctx.editMessageText('✅ Risk Mode set to: **Aggressive** (3% per trade)', { parse_mode: 'Markdown' });
 });
 
-bot.launch();
+// Use webhooks in production (Render), polling in development
+if (process.env.RENDER_EXTERNAL_URL) {
+    // Production: Use webhooks
+    const webhookPath = '/telegram-webhook';
+    const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}${webhookPath}`;
 
-console.log('🤖 Bridge Bot Started');
+    bot.telegram.setWebhook(webhookUrl).then(() => {
+        console.log('🤖 Bridge Bot Started (Webhook Mode)');
+        console.log(`   Webhook URL: ${webhookUrl}`);
+    }).catch(err => {
+        console.error('❌ Failed to set webhook:', err.message);
+    });
 
-module.exports = bot;
+    // Export webhook handler for server.js
+    module.exports = { bot, webhookPath };
+} else {
+    // Development: Use polling
+    bot.launch().then(() => {
+        console.log('🤖 Bridge Bot Started (Polling Mode - Development)');
+    }).catch(err => {
+        console.error('❌ Bot launch failed:', err.message);
+        console.log('⚠️  Continuing without bot...');
+    });
+
+    module.exports = { bot };
+}
