@@ -1,32 +1,48 @@
 # 🤖 Gold AI Bridge Bot Commands
 
-Here are the commands available for your Telegram Bot:
+Here is the complete list of commands available in your **Gold AI Auto-Trading Bridge Bot**.
 
-## 🚀 **Main Commands**
+## 🚀 **User Commands**
 
-### `/start`
-**Description:** Shows the welcome message and setup instructions.
-**Usage:** Just type `/start` to verify the bot is online.
+### 1. Start & Setup
+- **/start**  
+  Initializes the bot and shows the welcome menu.
 
-### `/connect`
-**Description:** Generates your unique **Bridge Token**.
-**Usage:**
-1. Type `/connect`
-2. Bot will reply with a token like `BRIDGE-123456789-xyz...`
-3. Copy this token and paste it into the **EA Inputs** in MT5.
+- **/activate <LICENSE_KEY>**  
+  Activates your license to start receiving signals.  
+  **Usage:** `/activate GOLDAI-TEST-XXXX`
 
-### `/risk`
-**Description:** Sets your risk management preference.
-**Usage:**
-1. Type `/risk`
-2. Click one of the buttons:
-   - **🐢 Conservative:** 1% risk per trade
-   - **🚀 Aggressive:** 3% risk per trade
+### 2. Main Menu Actions
+(Accessible via the custom keyboard buttons)
+
+- **📊 My Stats**  
+  View your daily trading performance, including:
+  - Balance
+  - Total Profit/Loss
+  - Win Rate
+  - Total Trades
+
+- **📡 My Watchlist**  
+  Shows the list of active signals your EA is currently monitoring. Displays entry prices, stop loss, and take profit targets.
+
+- **🔑 My License**  
+  Checks your current license status, type (Test/Monthly), and days remaining until expiration.
+
+- **❓ Help**  
+  Shows a quick guide on how to use the bot and set up the EA.
 
 ---
 
-## ⚠️ **Troubleshooting**
-If the bot doesn't respond:
-1. Check if `BRIDGE_BOT_TOKEN` is set in Render.
-2. Check if `RENDER_EXTERNAL_URL` is set in Render.
-3. Visit `https://your-bridge-url.onrender.com/debug` to check status.
+## 👑 **Admin Commands**
+*(Visible only to the Admin User set in `.env`)*
+
+- **👑 Create License**  
+  Opens a menu to generate new licenses:
+  - **🧪 Test License:** Generates a unique 5-day key (`GOLDAI-TEST-XXXX`).
+  - **💎 Monthly License:** Generates a unique 30-day key.
+
+- **📋 List Licenses**  
+  Shows the last 20 generated licenses and their status (Active/Expired).
+
+- **📊 User Stats**  
+  Displays trading statistics (Balance, P/L) for all active users.

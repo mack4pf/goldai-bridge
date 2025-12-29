@@ -1,4 +1,5 @@
 const express = require('express');
+const copierManager = require('../services/copierManager');
 const router = express.Router();
 const { db } = require('../database/firebase');
 const licenseService = require('../services/licenseService'); // Already an instance!
@@ -12,78 +13,15 @@ const statsManager = new DailyStatsManager(db);
 // MIDDLEWARE
 // ============================================================================
 
-// Validate EA License
-const requireLicense = async (req, res, next) => {
-    const licenseKey = req.headers['x-license-key'] || req.query.license;
+// ============================================================================
+// MIDDLEWARE
+// ============================================================================
 
-    if (!licenseKey) {
-        return res.status(401).json({ error: 'Missing License Key' });
-    }
-
-    const licenseCheck = await licenseService.checkLicense(licenseKey);
-
-    if (!licenseCheck.valid) {
-        return res.status(403).json({
-            error: 'Invalid or Expired License',
-            reason: licenseCheck.reason
-        });
-    }
-
-    req.license = licenseCheck;
-    req.userId = licenseCheck.userId;
+// Middleware to force Master VPS identity
+const forceMasterUser = (req, res, next) => {
+    req.userId = 'MASTER_VPS';
     next();
 };
-
-// ============================================================================
-// LICENSING ENDPOINTS
-// ============================================================================
-
-/**
- * POST /api/v1/license/activate
- */
-router.post('/license/activate', async (req, res) => {
-    try {
-        const { userId, licenseKey } = req.body;
-
-        if (!userId || !licenseKey) {
-            return res.status(400).json({ error: 'Missing userId or licenseKey' });
-        }
-
-        const result = await licenseService.activateLicense(userId, licenseKey);
-
-        res.json({
-            success: true,
-            ...result,
-            message: result.isTestLicense
-                ? '🧪 Test license activated (5 days)'
-                : '✅ License activated (30 days)'
-        });
-
-    } catch (error) {
-        console.error('Activate license error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * GET /api/v1/license/check
- */
-router.get('/license/check', async (req, res) => {
-    try {
-        const licenseKey = req.query.license;
-
-        if (!licenseKey) {
-            return res.status(400).json({ error: 'Missing license key' });
-        }
-
-        const result = await licenseService.checkLicense(licenseKey);
-        res.json(result);
-
-    } catch (error) {
-        console.error('Check license error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
 
 // ============================================================================
 // SIGNAL PROCESSING
@@ -126,42 +64,19 @@ router.post('/signals', async (req, res) => {
             status: 'active'
         });
 
-        // Distribute to active users
-        const licensesSnapshot = await db.collection('licenses')
-            .where('status', '==', 'active')
-            .get();
-
-        let distributedCount = 0;
-        const batch = db.batch();
-
-        for (const licenseDoc of licensesSnapshot.docs) {
-            const license = licenseDoc.data();
-
-            // Check if license expired
-            if (new Date() > license.expiresAt.toDate()) {
-                batch.update(licenseDoc.ref, {
-                    status: 'expired',
-                    expiredAt: new Date()
-                });
-                continue;
+        // Distribute to MASTER_VPS only (Single VPS Mode)
+        const watchlistRef = db.collection('watchlist').doc();
+        await watchlistRef.set({
+            userId: 'MASTER_VPS',
+            signalId: signalRef.id,
+            status: 'monitoring',
+            addedAt: new Date(),
+            signalData: {
+                symbol, type, entry, sl, tp, timeframe, confidence, qualityScore
             }
+        });
 
-            // Add to watchlist
-            const watchlistRef = db.collection('watchlist').doc();
-            batch.set(watchlistRef, {
-                userId: license.userId,
-                signalId: signalRef.id,
-                status: 'monitoring',
-                addedAt: new Date(),
-                signalData: {
-                    symbol, type, entry, sl, tp, timeframe, confidence, qualityScore
-                }
-            });
-
-            distributedCount++;
-        }
-
-        await batch.commit();
+        const distributedCount = 1;
 
         console.log(`   ✅ Distributed to ${distributedCount} users`);
 
@@ -185,7 +100,7 @@ router.post('/signals', async (req, res) => {
 /**
  * GET /api/v1/watchlist
  */
-router.get('/watchlist', requireLicense, async (req, res) => {
+router.get('/watchlist', forceMasterUser, async (req, res) => {
     try {
         const snapshot = await db.collection('watchlist')
             .where('userId', '==', req.userId)
@@ -212,7 +127,7 @@ router.get('/watchlist', requireLicense, async (req, res) => {
 /**
  * POST /api/v1/watchlist/update
  */
-router.post('/watchlist/update', requireLicense, async (req, res) => {
+router.post('/watchlist/update', forceMasterUser, async (req, res) => {
     try {
         const { signalId, status, ticket } = req.body;
 
@@ -236,6 +151,32 @@ router.post('/watchlist/update', requireLicense, async (req, res) => {
 
     } catch (error) {
         console.error('Watchlist update error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+// --- CLOUD COPIER ROUTES ---
+
+/**
+ * Endpoint for Master EA (VPS) to broadcast trade events
+ */
+router.post('/copier/master/trade', async (req, res) => {
+    try {
+        const tradeEvent = req.body;
+
+        if (!tradeEvent || !tradeEvent.symbol || !tradeEvent.operation) {
+            return res.status(400).json({ error: 'Missing trade event data' });
+        }
+
+        // Handle the trade asynchronously to avoid blocking the Master EA
+        copierManager.handleMasterTrade(tradeEvent).catch(err => {
+            console.error('Async copier error:', err);
+        });
+
+        res.json({ success: true, message: 'Trade event broadcasted' });
+    } catch (error) {
+        console.error('Copier route error:', error);
         res.status(500).json({ error: error.message });
     }
 });

@@ -9,11 +9,11 @@
 bool ValidateRSI(string condition, double requiredValue)
 {
     // Calculate current RSI
-    double rsiArray[];
     ArraySetAsSeries(rsiArray, true);
     
     int rsiHandle = iRSI(_Symbol, PERIOD_CURRENT, 14, PRICE_CLOSE);
     if(rsiHandle == INVALID_HANDLE)
+    double rsiArray[];
     {
         Print("❌ RSI indicator failed");
         return false;

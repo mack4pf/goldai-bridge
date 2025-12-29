@@ -7,6 +7,10 @@ const { db } = require('./database/firebase');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Force Master Mode
+console.log('👑 Single VPS Master Mode Active');
+console.log('   Identity: MASTER_VPS');
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
