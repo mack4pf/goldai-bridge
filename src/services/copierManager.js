@@ -1,4 +1,4 @@
-const MetaApi = require('metaapi.cloud-sdk');
+const MetaApi = require('metaapi.cloud-sdk').default;
 const { db } = require('../database/firebase');
 
 class CopierManager {
