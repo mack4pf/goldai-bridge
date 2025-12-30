@@ -22,8 +22,8 @@ class SignalScheduler {
         console.log('🎯 Timeframes: 5min, 15min');
         console.log('💰 Balance Tiers: $50, $200');
 
-        // Run every hour at minute 0
-        cron.schedule('0 */1 * * *', async () => {
+        // Run at 5 minutes past every hour (:05)
+        cron.schedule('5 * * * *', async () => {
             await this.runSignalCycle();
         });
 
