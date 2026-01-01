@@ -11,10 +11,10 @@ BRIDGE_API_URL=http://localhost:3001
 ### Production (Replace with your Render URLs)
 ```env
 # Gold Mentor Pro main server URL
-GOLD_MENTOR_API_URL=https://your-goldai-mentor-pro.onrender.com
+GOLD_MENTOR_API_URL=https://goldai-mentor-pro-rrue.onrender.com
 
 # Bridge API server URL  
-BRIDGE_API_URL=https://your-goldai-bridge.onrender.com
+BRIDGE_API_URL=https://goldai-bridge-is7d.onrender.com
 ```
 
 ## 📋 Deployment Steps
@@ -22,16 +22,19 @@ BRIDGE_API_URL=https://your-goldai-bridge.onrender.com
 ### 1. Deploy Gold Mentor Pro (Main Server)
 - Push to GitHub/Render
 - Set environment variables
-- Get the deployed URL (e.g., `https://goldai-mentor-pro.onrender.com`)
+- Get the deployed URL (e.g., `https://goldai-mentor-pro-rrue.onrender.com`)
 
 ### 2. Deploy Bridge API
 - Use the Gold Mentor Pro URL in `GOLD_MENTOR_API_URL`
 - Set all environment variables
-- Get the deployed URL (e.g., `https://goldai-bridge.onrender.com`)
+- Get the deployed URL (e.g., `https://goldai-bridge-is7d.onrender.com`)
+- Set the `BRIDGE_API_URL` secret on Render with this value.
+- Enter this URL in your EA inputs:
+- Example: `API_URL = https://goldai-bridge-is7d.onrender.com/api/v1`
 
 ### 3. Update MT5 EA
 - In EA inputs, use the Bridge API URL
-- Example: `API_URL = https://goldai-bridge.onrender.com/api/v1`
+- Example: `API_URL = https://goldai-bridge-is7d.onrender.com/api/v1`
 
 ### 4. Test License
 - Activate test license: `GOLDAI-TEST-2024`
@@ -60,13 +63,13 @@ When you get your Render URLs, update these files:
 
 1. **Bridge API `.env`**
    ```env
-   GOLD_MENTOR_API_URL=https://your-goldai-mentor-pro.onrender.com
-   BRIDGE_API_URL=https://your-goldai-bridge.onrender.com
+   GOLD_MENTOR_API_URL=https://goldai-mentor-pro-rrue.onrender.com
+   BRIDGE_API_URL=https://goldai-bridge-is7d.onrender.com
    ```
 
 2. **MT5 EA Settings**
    ```
-   API_URL = https://your-goldai-bridge.onrender.com/api/v1
+   API_URL = https://goldai-bridge-is7d.onrender.com/api/v1
    License_Key = GOLDAI-TEST-2024
    ```
 
@@ -74,8 +77,8 @@ When you get your Render URLs, update these files:
 
 ## ✅ Testing Checklist
 
-- [ ] Gold Mentor Pro accessible at your-url.onrender.com
-- [ ] Bridge API accessible at your-url.onrender.com
+- [ ] Gold Mentor Pro accessible at https://goldai-mentor-pro-rrue.onrender.com
+- [ ] Bridge API accessible at https://goldai-bridge-is7d.onrender.com
 - [ ] Bridge API can connect to Gold Mentor Pro
 - [ ] Hourly scheduler runs and requests signals
 - [ ] MT5 EA connects with license key

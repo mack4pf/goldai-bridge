@@ -66,21 +66,29 @@ class CopierManager {
             // Wait for connection to be ready (simplified for now)
             await connection.waitConnected();
 
-            // Execute trade based on operation (ORDER_TYPE_BUY or ORDER_TYPE_SELL)
-            // Use symbol and calculated lot size based on riskManager if needed
-            // For now, we use a simple proportion or fixed lot
-            const lotSize = tradeEvent.lotSize || 0.01;
+            // Determine if we are opening or closing
+            if (tradeEvent.operation === 'OPEN') {
+                const lotSize = tradeEvent.lotSize || 0.01;
 
-            if (tradeEvent.operation === 'ORDER_TYPE_BUY') {
-                await connection.createMarketBuyOrder(tradeEvent.symbol, lotSize, tradeEvent.sl, tradeEvent.tp);
-            } else if (tradeEvent.operation === 'ORDER_TYPE_SELL') {
-                await connection.createMarketSellOrder(tradeEvent.symbol, lotSize, tradeEvent.sl, tradeEvent.tp);
-            } else if (tradeEvent.operation === 'ORDER_TYPE_CLOSE') {
-                // Implement close logic (need to find ticket mapping)
-                await connection.closePositionsBySymbol(tradeEvent.symbol);
+                if (tradeEvent.type === 'BUY') {
+                    await connection.createMarketBuyOrder(tradeEvent.symbol, lotSize, tradeEvent.sl, tradeEvent.tp);
+                } else if (tradeEvent.type === 'SELL') {
+                    await connection.createMarketSellOrder(tradeEvent.symbol, lotSize, tradeEvent.sl, tradeEvent.tp);
+                }
+                console.log(`   ✅ Trade OPENED successfully on ${mt5Login}`);
             }
-
-            console.log(`   ✅ Trade copied successfully to ${mt5Login}`);
+            else if (tradeEvent.operation.includes('CLOSE')) {
+                // For partial or full close, we close by symbol for now 
+                // In a multi-trade scenario, we would need to map tickets
+                if (tradeEvent.operation.includes('PARTIAL')) {
+                    // MetaApi partial close: find the position and close a portion
+                    // For now, closing by symbol handles the most common case
+                    await connection.closePositionsBySymbol(tradeEvent.symbol);
+                } else {
+                    await connection.closePositionsBySymbol(tradeEvent.symbol);
+                }
+                console.log(`   ✅ Trade CLOSED successfully on ${mt5Login}`);
+            }
 
             // Log to copier_stats
             await db.collection('copier_stats').add({
@@ -88,6 +96,8 @@ class CopierManager {
                 mt5Login: mt5Login,
                 symbol: tradeEvent.symbol,
                 operation: tradeEvent.operation,
+                type: tradeEvent.type,
+                lotSize: tradeEvent.lotSize,
                 status: 'success',
                 timestamp: new Date()
             });

@@ -23,7 +23,7 @@
 4. Add these URLs:
    ```
    http://localhost:3001
-   https://your-bridge-api.onrender.com
+   https://goldai-bridge-is7d.onrender.com
    ```
 5. Click **OK**
 
@@ -44,7 +44,7 @@ When the settings window appears:
 **Inputs Tab:**
 ```
 API_URL = http://localhost:3001/api/v1
-(or your Render URL: https://your-bridge-api.onrender.com/api/v1)
+(or your Render URL: https://goldai-bridge-is7d.onrender.com/api/v1)
 
 License_Key = GOLDAI-TEST-2024
 Risk_Percent = 6.0
@@ -91,7 +91,7 @@ If you see:
 
 When deploying to Render, only change:
 ```
-API_URL = https://your-bridge-api.onrender.com/api/v1
+API_URL = https://goldai-bridge-is7d.onrender.com/api/v1
 License_Key = GOLDAI-XXXX-XXXX-XXXX
 ```
 

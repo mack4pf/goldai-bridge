@@ -13,7 +13,7 @@
 //+------------------------------------------------------------------+
 //| INPUT PARAMETERS                                                  |
 //+------------------------------------------------------------------+
-input string   API_URL = "https://goldai-bridge.onrender.com/api/v1";  // Your Render URL
+input string   API_URL = "https://goldai-bridge-is7d.onrender.com/api/v1";  // Your Render URL
 
 input double   Risk_Percent = 2.0;                         // Risk per trade (%)
 input double   Max_Risk_Percent = 5.0;                     // Maximum risk allowed (%)

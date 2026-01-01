@@ -43,7 +43,14 @@ app.get('/debug', (req, res) => {
 
 // Import Routes
 const apiRoutes = require('./api/routes_advanced');
+const userRoutes = require('./api/userRoutes');
+const mt5Routes = require('./api/mt5Routes');
+const adminRoutes = require('./api/adminRoutes');
+
 app.use('/api/v1', apiRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/mt5', mt5Routes);
+app.use('/api/v1/admin', adminRoutes);
 
 // Initialize Bot
 const botModule = require('./bot/bot');
@@ -58,7 +65,9 @@ if (process.env.RENDER_EXTERNAL_URL && botModule.webhookPath) {
 app.listen(PORT, () => {
     console.log(`🚀 Auto-Bridge Server running on port ${PORT}`);
     console.log(`📊 API Documentation: /docs/API.md`);
+    console.log(`📡 Waiting for signals from Gold Mentor Pro...`);
 });
 
-// Initialize Signal Scheduler
-require('./schedulers/signalScheduler').start();
+// NOTE: Signal Scheduler removed - Mentor Pro PUSHES signals to Bridge
+// The Bridge no longer pulls/requests signals
+

@@ -152,7 +152,7 @@ User in Telegram:
 ```
 MT5 EA Settings:
 License_Key = GOLDAI-TEST-2024
-API_URL = https://your-bridge.onrender.com/api/v1
+API_URL = https://goldai-bridge-is7d.onrender.com/api/v1
 ```
 
 **User monitors:**
