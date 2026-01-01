@@ -68,32 +68,37 @@ router.post('/connect', verifyToken, async (req, res) => {
         console.log(`   MetaApi Account Created: ${account.id}`);
 
         // Deploy account
-        await account.deploy();
         console.log(`   Deploying account...`);
-
-        // Wait for connection (with timeout)
-        const connectionTimeout = 60000; // 60 seconds
-        const startTime = Date.now();
+        await account.deploy();
 
         try {
+            console.log(`   Waiting for account deployment...`);
+            await account.waitDeployed(60000);
+
+            // Wait for connection (with timeout)
+            const connectionTimeout = 60000; // 60 seconds
+            console.log(`   Waiting for broker connection...`);
             await account.waitConnected(1, connectionTimeout);
             console.log(`   ✅ Account connected successfully`);
-        } catch (error) {
-            console.error(`   ⚠️  Connection timeout or failed:`, error.message);
-            // Continue anyway - account might connect later
-        }
 
-        // Get account information
-        let accountInfo = null;
-        try {
-            const connection = account.getRPCConnection();
-            await connection.connect();
-            await connection.waitSynchronized();
-            accountInfo = await connection.getAccountInformation();
-            console.log(`   Balance: $${accountInfo.balance}`);
-            console.log(`   Equity: $${accountInfo.equity}`);
+            // Get account information
+            try {
+                const connection = account.getRPCConnection();
+                await connection.connect();
+                await connection.waitSynchronized();
+                accountInfo = await connection.getAccountInformation();
+                console.log(`   Balance: $${accountInfo.balance}`);
+                console.log(`   Equity: $${accountInfo.equity}`);
+            } catch (error) {
+                console.warn(`   Could not fetch account info via RPC:`, error.message);
+            }
         } catch (error) {
-            console.warn(`   Could not fetch account info:`, error.message);
+            console.error(`   ⚠️  Deployment or Connection failed:`, error.message);
+            // We still store it in Firestore as 'pending' or 'failed' if needed, 
+            // but for now let's stop the process for this request so the user knows it failed.
+            return res.status(400).json({
+                error: `Connection failed: ${error.message}. Please check your credentials and broker server.`
+            });
         }
 
         // Store in Firestore
