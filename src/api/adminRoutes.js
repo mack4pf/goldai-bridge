@@ -373,6 +373,62 @@ router.get('/stats', verifyAdminToken, async (req, res) => {
 });
 
 // ============================================================================
+// ADMIN SYSTEM CONFIG
+// ============================================================================
+
+/**
+ * GET /api/v1/admin/config
+ * Get system configuration
+ */
+router.get('/config', verifyAdminToken, async (req, res) => {
+    try {
+        const doc = await db.collection('system_settings').doc('global_config').get();
+        if (!doc.exists) {
+            const defaultConfig = {
+                broadcastEnabled: true,
+                updatedAt: new Date()
+            };
+            await db.collection('system_settings').doc('global_config').set(defaultConfig);
+            return res.json({ success: true, config: defaultConfig });
+        }
+
+        const data = doc.data();
+        res.json({
+            success: true,
+            config: {
+                ...data,
+                updatedAt: data.updatedAt?.toDate()
+            }
+        });
+    } catch (error) {
+        console.error('Get config error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/v1/admin/config
+ * Update system configuration
+ */
+router.post('/config', verifyAdminToken, async (req, res) => {
+    try {
+        const { broadcastEnabled } = req.body;
+
+        await db.collection('system_settings').doc('global_config').set({
+            broadcastEnabled,
+            updatedAt: new Date()
+        }, { merge: true });
+
+        console.log(`✅ Admin ${req.user.email} updated config: broadcastEnabled=${broadcastEnabled}`);
+
+        res.json({ success: true, message: 'Configuration updated' });
+    } catch (error) {
+        console.error('Update config error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================================================
 // MIDDLEWARE
 // ============================================================================
 

@@ -61,10 +61,12 @@ class CopierManager {
         console.log(`   🚀 Copying to ${mt5Login} (MetaApi ID: ${metaApiId})...`);
 
         try {
-            const connection = await this.api.metatraderAccountApi.getAccount(metaApiId);
+            const account = await this.api.metatraderAccountApi.getAccount(metaApiId);
 
-            // Wait for connection to be ready (simplified for now)
-            await connection.waitConnected();
+            // Get RPC connection
+            const connection = account.getRPCConnection();
+            await connection.connect();
+            await connection.waitSynchronized();
 
             // Determine if we are opening or closing
             if (tradeEvent.operation === 'OPEN') {
@@ -80,13 +82,7 @@ class CopierManager {
             else if (tradeEvent.operation.includes('CLOSE')) {
                 // For partial or full close, we close by symbol for now 
                 // In a multi-trade scenario, we would need to map tickets
-                if (tradeEvent.operation.includes('PARTIAL')) {
-                    // MetaApi partial close: find the position and close a portion
-                    // For now, closing by symbol handles the most common case
-                    await connection.closePositionsBySymbol(tradeEvent.symbol);
-                } else {
-                    await connection.closePositionsBySymbol(tradeEvent.symbol);
-                }
+                await connection.closePositionsBySymbol(tradeEvent.symbol);
                 console.log(`   ✅ Trade CLOSED successfully on ${mt5Login}`);
             }
 
