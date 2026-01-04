@@ -84,7 +84,14 @@ int OnInit()
     
     Print("✅ License Valid! Expires: ", license_status_msg);
     Print("Magic Number: ", Magic_Number);
-    Print("Starting Equity: ", starting_balance_today);
+    
+    // Ensure we have a valid balance
+    if(starting_balance_today <= 0) starting_balance_today = AccountInfoDouble(ACCOUNT_BALANCE);
+    
+    Print("💰 Current Balance: ", DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2));
+    Print("📊 Current Equity: ", DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2));
+    Print("📅 Starting Daily Balance: ", DoubleToString(starting_balance_today, 2));
+    
     return(INIT_SUCCEEDED);
 }
 
