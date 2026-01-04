@@ -31,7 +31,7 @@ class LicenseService {
         try {
             // Check for test license prefix (GOLDAI-TEST-...)
             const isTestLicense = licenseKey.startsWith('GOLDAI-TEST-');
-            const daysValid = isTestLicense ? 5 : 30;
+            const daysValid = isTestLicense ? 7 : 30;
 
             const activatedAt = new Date();
             const expiresAt = new Date();

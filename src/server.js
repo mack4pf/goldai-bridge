@@ -46,11 +46,13 @@ const apiRoutes = require('./api/routes_advanced');
 const userRoutes = require('./api/userRoutes');
 const mt5Routes = require('./api/mt5Routes');
 const adminRoutes = require('./api/adminRoutes');
+const licenseRoutes = require('./api/licenseRoutes');
 
 app.use('/api/v1', apiRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/mt5', mt5Routes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/license', licenseRoutes);
 
 // Initialize Bot
 const botModule = require('./bot/bot');

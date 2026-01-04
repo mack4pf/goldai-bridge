@@ -23,6 +23,18 @@ const forceMasterUser = (req, res, next) => {
     next();
 };
 
+// Middleware to validate Bridge Token
+const validateBridgeToken = (req, res, next) => {
+    const token = req.headers['x-bridge-token'];
+    const MASTER_TOKEN = process.env.BRIDGE_TOKEN || 'MASTER_EA_TOKEN';
+
+    if (token !== MASTER_TOKEN) {
+        console.warn(`⚠️ Unauthorized EA Access Attempt: Invalid Token Provided`);
+        return res.status(401).json({ error: 'Unauthorized: Invalid Bridge Token' });
+    }
+    next();
+};
+
 // ============================================================================
 // SIGNAL PROCESSING
 // ============================================================================
@@ -100,6 +112,9 @@ router.post('/signals', async (req, res) => {
 /**
  * GET /api/v1/watchlist
  */
+/**
+ * GET /api/v1/watchlist
+ */
 router.get('/watchlist', forceMasterUser, async (req, res) => {
     try {
         const snapshot = await db.collection('watchlist')
@@ -107,16 +122,33 @@ router.get('/watchlist', forceMasterUser, async (req, res) => {
             .where('status', '==', 'monitoring')
             .get();
 
-        const watchlist = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-
-        res.json({
-            success: true,
-            count: watchlist.length,
-            watchlist
+        const watchlist = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                signalId: data.signalId,
+                symbol: data.signalData.symbol,
+                type: data.signalData.type,
+                entry: data.signalData.entry,
+                sl: data.signalData.sl,
+                tp: data.signalData.tp,
+                confidence: data.signalData.confidence,
+                grade: data.signalData.grade || 'A'
+            };
         });
+
+        // The EA expects a single object if signals are available, or a "count: 0" response
+        if (watchlist.length > 0) {
+            res.json({
+                success: true,
+                ...watchlist[0] // Send the first active signal for the EA to process
+            });
+        } else {
+            res.json({
+                success: true,
+                count: 0,
+                message: 'No active signals'
+            });
+        }
 
     } catch (error) {
         console.error('Watchlist error:', error);
