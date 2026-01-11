@@ -10,19 +10,49 @@ const BRIDGE_URL = process.env.BRIDGE_API_URL || 'https://goldai-bridge-is7d.onr
 
 async function testSignalFlow() {
     console.log('\n' + '='.repeat(80));
-    console.log('🧪 TESTING COMPLETE SIGNAL FLOW');
+    console.log('🧪 TESTING COMPLETE SIGNAL FLOW (Multi-TP Support)');
     console.log('='.repeat(80) + '\n');
 
+    // Step 0: Clear current monitoring signals to ensure we get the fresh one
+    console.log('🧹 Step 0: Archiving existing monitoring signals...\n');
+    try {
+        let hasMore = true;
+        while (hasMore) {
+            const currentWatchlist = await axios.get(`${BRIDGE_URL}/watchlist`);
+            if (currentWatchlist.data.success && currentWatchlist.data.signalId) {
+                console.log(`   Found old signal ${currentWatchlist.data.signalId}. Archiving...`);
+                try {
+                    await axios.post(`${BRIDGE_URL}/watchlist/update`, {
+                        signalId: currentWatchlist.data.signalId,
+                        status: 'archived_by_test'
+                    });
+                    console.log(`   ✅ Archived ${currentWatchlist.data.signalId}`);
+                } catch (updateError) {
+                    console.error(`   ❌ Failed to archive ${currentWatchlist.data.signalId}:`,
+                        updateError.response?.data || updateError.message);
+                    hasMore = false;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+        console.log('   ✅ Watchlist check complete.');
+    } catch (e) {
+        console.log('   (Error during watchlist fetch):', e.message);
+    }
+
     // Step 1: Simulate Mentor Pro sending a signal
-    console.log('📡 Step 1: Simulating Mentor Pro sending signal to Bridge...\n');
+    console.log('\n📡 Step 1: Simulating Mentor Pro sending signal to Bridge...\n');
 
     const testSignal = {
         symbol: 'XAUUSD',
         type: 'BUY',
         entry: 2650.50,
-        sl: 2645.00,
-        tp: 2655.50,
-        tp2: 2660.00,
+        sl: 2646.50, // 40 pips
+        tp: 2653.50,  // 30 pips
+        tp2: 2655.50, // 50 pips
+        tp3: 2660.50, // 100 pips
+        tp4: 2665.50, // 150 pips
         timeframe: 'MASTER',
         confidence: 85,
         grade: 'A+',
@@ -43,64 +73,42 @@ async function testSignalFlow() {
         if (pushResponse.data.success) {
             console.log('✅ Signal pushed to Bridge successfully!');
             console.log(`   Signal ID: ${pushResponse.data.signalId}`);
-            console.log(`   Quality Score: ${pushResponse.data.qualityScore}`);
-            console.log(`   Distributed to: ${pushResponse.data.distributed} users`);
-        } else {
-            console.log('⚠️  Signal push response:', pushResponse.data);
-        }
 
-    } catch (error) {
-        console.error('❌ Failed to push signal:', error.message);
-        if (error.response) {
-            console.error('   Status:', error.response.status);
-            console.error('   Data:', error.response.data);
-        }
-        return;
-    }
+            // Wait for DB consistency
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Step 2: Verify signal is in watchlist (Master EA will poll this)
-    console.log('\n📊 Step 2: Checking if signal is in watchlist (for Master EA)...\n');
+            // Step 2: Verify signal is in watchlist
+            console.log('\n📊 Step 2: Checking watchlist for the new signal...\n');
+            const watchlistResponse = await axios.get(`${BRIDGE_URL}/watchlist`);
 
-    try {
-        const watchlistResponse = await axios.get(`${BRIDGE_URL}/watchlist`);
+            if (watchlistResponse.data.success && watchlistResponse.data.signalId === pushResponse.data.signalId) {
+                const latestSignal = watchlistResponse.data;
+                console.log('✅ Correct signal found in watchlist.');
+                console.log(`   • TP1: ${latestSignal.tp}`);
+                console.log(`   • TP2: ${latestSignal.tp2}`);
+                console.log(`   • TP3: ${latestSignal.tp3}`);
+                console.log(`   • TP4: ${latestSignal.tp4}`);
 
-        if (watchlistResponse.data.success) {
-            console.log(`✅ Watchlist accessible - ${watchlistResponse.data.count} signals available`);
-
-            if (watchlistResponse.data.watchlist.length > 0) {
-                const latestSignal = watchlistResponse.data.watchlist[0];
-                console.log('\n   Latest Signal for Master EA:');
-                console.log(`   • Type: ${latestSignal.signalData?.type}`);
-                console.log(`   • Entry: ${latestSignal.signalData?.entry}`);
-                console.log(`   • SL: ${latestSignal.signalData?.sl}`);
-                console.log(`   • TP: ${latestSignal.signalData?.tp}`);
-                console.log(`   • Confidence: ${latestSignal.signalData?.confidence}%`);
-                console.log(`   • Added: ${new Date(latestSignal.addedAt).toLocaleString()}`);
+                const allTpsPresent = latestSignal.tp && latestSignal.tp2 && latestSignal.tp3 && latestSignal.tp4;
+                if (allTpsPresent) {
+                    console.log('\n🏆 SUCCESS: All 4 TP levels correctly stored and served!');
+                } else {
+                    console.error('\n❌ FAILURE: Missing TP levels in watchlist response.');
+                }
+            } else {
+                console.error('\n❌ FAILURE: Could not find the pushed signal in watchlist.');
+                console.log('   Response ID:', watchlistResponse.data.signalId);
+                console.log('   Pushed ID:', pushResponse.data.signalId);
             }
         }
 
     } catch (error) {
-        console.error('❌ Failed to fetch watchlist:', error.message);
-        return;
+        console.error('❌ Test failed:', error.message);
     }
 
-    // Step 3: Summary
     console.log('\n' + '='.repeat(80));
     console.log('✅ SIGNAL FLOW TEST COMPLETE');
     console.log('='.repeat(80));
-    console.log('\n📋 Flow Summary:');
-    console.log('   1. ✅ Mentor Pro → Bridge API (signal pushed)');
-    console.log('   2. ✅ Bridge API → Watchlist (signal stored)');
-    console.log('   3. ⏳ Master EA → Polls watchlist every hour at :02');
-    console.log('   4. ⏳ Master EA → Executes trade');
-    console.log('   5. ⏳ Master EA → Broadcasts to copier');
-    console.log('   6. ⏳ Copier → Distributes to 100+ users\n');
-
-    console.log('🎯 Next Steps:');
-    console.log('   1. Deploy Master EA to VPS');
-    console.log('   2. Wait for hourly signal from Mentor Pro');
-    console.log('   3. Verify Master EA receives and executes');
-    console.log('   4. Check trade copied to follower accounts\n');
 }
 
 testSignalFlow().catch(error => {

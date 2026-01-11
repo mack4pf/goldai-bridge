@@ -23,6 +23,10 @@ input int      Max_Trades_Per_Day = 5;                               // Risk Con
 input double   Max_Daily_Drawdown_Percent = 5.0;                      // Risk Control: Max daily loss %
 input double   TP1_Ratio = 0.40;                                      // TP1 target (40% of signal TP distance)
 input int      Safety_Close_Minutes = 120;                            // Move to BE after X minutes
+//--- DEBUG SETTINGS ---
+input bool     Enable_Debug_Mode = true;                             // Enable detailed debug prints
+input int      Max_Account_Info_Retries = 50;                        // Max retries for account data (50 ticks)
+input int      Retry_Delay_MS = 100;                                 // Delay between retries (ms)
 
 // Session Hours (GMT)
 input int      London_Start = 8;                                      // London Start Hour
@@ -44,6 +48,9 @@ double         starting_balance_today = 0;
 bool           is_license_valid = false;
 datetime       last_license_check = 0;
 string         license_status_msg = "Checking License...";
+//--- DEBUG VARIABLES ---
+bool           account_info_loaded = false;
+int            account_info_retries = 0;
 
 //+------------------------------------------------------------------+
 //| STRUCTURES                                                        |
@@ -56,10 +63,94 @@ struct SignalData
     double entry;
     double sl;
     double tp;
+    double tp2;
+    double tp3;
+    double tp4;
     double confidence;
     string grade;
     datetime timestamp;
 };
+
+//+------------------------------------------------------------------+
+//| DEBUG HELPER FUNCTIONS                                            |
+//+------------------------------------------------------------------+
+void DebugPrint(string message)
+{
+    if(Enable_Debug_Mode)
+    {
+        Print(TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS), " [DEBUG] ", message);
+    }
+}
+
+string ErrorDescription(int error_code)
+{
+    switch(error_code)
+    {
+        case 0:   return "No error";
+        case 1:   return "No error, but result unknown";
+        case 2:   return "Common error";
+        case 3:   return "Invalid trade parameters";
+        case 4:   return "Trade server is busy";
+        case 5:   return "Old version of the client terminal";
+        case 6:   return "No connection with trade server";
+        case 4014:return "WebRequest not allowed (add URL to Options > Expert Advisors)";
+        case 4016:return "WebRequest timeout";
+        case 4017:return "WebRequest failed";
+        default:  return "Unknown error " + IntegerToString(error_code);
+    }
+}
+
+void PrintAccountInfo()
+{
+    if(!Enable_Debug_Mode) return;
+    
+    DebugPrint("=== ACCOUNT INFO ===");
+    DebugPrint("Login: " + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)));
+    DebugPrint("Name: " + AccountInfoString(ACCOUNT_NAME));
+    DebugPrint("Company: " + AccountInfoString(ACCOUNT_COMPANY));
+    DebugPrint("Balance: " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2));
+    DebugPrint("Equity: " + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2));
+    DebugPrint("Free Margin: " + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2));
+    DebugPrint("Margin: " + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN), 2));
+    DebugPrint("Leverage: 1:" + IntegerToString(AccountInfoInteger(ACCOUNT_LEVERAGE)));
+    DebugPrint("Profit: " + DoubleToString(AccountInfoDouble(ACCOUNT_PROFIT), 2));
+    DebugPrint("=== END ACCOUNT INFO ===");
+}
+
+bool WaitForAccountInfo(int max_retries = 50, int delay_ms = 100)
+{
+    for(int i = 0; i < max_retries; i++)
+    {
+        double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+        if(balance > 0)
+        {
+            DebugPrint("Account info loaded successfully on attempt " + IntegerToString(i+1));
+            PrintAccountInfo();
+            return true;
+        }
+        
+        if(i == 0)
+        {
+            DebugPrint("Waiting for account information... (This is normal on EA startup)");
+            DebugPrint("Tip: Account data is often not available in OnInit(). Wait for OnTick().");
+        }
+        
+        // Replace Sleep with MT5 compatible delay
+        int startTime = GetTickCount();
+        while(GetTickCount() - startTime < delay_ms && !IsStopped())
+        {
+            // Wait without blocking other experts
+        }
+        
+        // Force refresh of symbol data
+        MqlTick last_tick;
+        SymbolInfoTick(_Symbol, last_tick);
+    }
+    
+    DebugPrint("WARNING: Failed to load account information after " + IntegerToString(max_retries) + " retries");
+    DebugPrint("Check terminal connection and ensure you're logged into a valid account.");
+    return false;
+}
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                    |
@@ -67,10 +158,19 @@ struct SignalData
 int OnInit()
 {
     trade.SetExpertMagicNumber(Magic_Number);
+    
+    DebugPrint("🚀 GoldAI Master EA v1.0 Initializing...");
+    DebugPrint("Terminal Build: " + IntegerToString(TerminalInfoInteger(TERMINAL_BUILD)));
+    DebugPrint("Terminal Connected: " + (TerminalInfoInteger(TERMINAL_CONNECTED) ? "Yes" : "No"));
+    DebugPrint("Symbol: " + _Symbol);
+    DebugPrint("Chart Period: " + IntegerToString(_Period));
+    
+    // Initial attempt to get account info (may fail)
     starting_balance_today = AccountInfoDouble(ACCOUNT_BALANCE);
+    DebugPrint("Initial balance check in OnInit: " + DoubleToString(starting_balance_today, 2));
+    
     last_trade_day = iTime(_Symbol, PERIOD_D1, 0);
     
-    Print("🚀 GoldAI Master EA v1.0 Initialized");
     Print("🔑 Verifying License Key: ", License_Key);
     
     // Initial License Check
@@ -85,12 +185,8 @@ int OnInit()
     Print("✅ License Valid! Expires: ", license_status_msg);
     Print("Magic Number: ", Magic_Number);
     
-    // Ensure we have a valid balance
-    if(starting_balance_today <= 0) starting_balance_today = AccountInfoDouble(ACCOUNT_BALANCE);
-    
-    Print("💰 Current Balance: ", DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2));
-    Print("📊 Current Equity: ", DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2));
-    Print("📅 Starting Daily Balance: ", DoubleToString(starting_balance_today, 2));
+    // Note: We'll wait for account info in OnTick()
+    DebugPrint("OnInit completed. Account info will be loaded in OnTick().");
     
     return(INIT_SUCCEEDED);
 }
@@ -100,7 +196,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-    Print("🛑 GoldAI Master EA Stopped");
+    DebugPrint("🛑 GoldAI Master EA Stopped. Reason: " + IntegerToString(reason));
 }
 
 //+------------------------------------------------------------------+
@@ -108,23 +204,41 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-    // 0. Periodic License Check (Every 1 hour)
+    // 0. Ensure account info is loaded (critical for first tick)
+    if(!account_info_loaded)
+    {
+        if(WaitForAccountInfo(Max_Account_Info_Retries, Retry_Delay_MS))
+        {
+            account_info_loaded = true;
+            starting_balance_today = AccountInfoDouble(ACCOUNT_BALANCE);
+            DebugPrint("💰 Current Balance: " + DoubleToString(starting_balance_today, 2));
+            DebugPrint("📊 Current Equity: " + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2));
+            DebugPrint("📅 Starting Daily Balance: " + DoubleToString(starting_balance_today, 2));
+        }
+        else
+        {
+            // Continue anyway but log warning
+            DebugPrint("⚠️ Trading with unconfirmed account info. Trades may fail.");
+        }
+    }
+
+    // 1. Periodic License Check (Every 1 hour)
     if(TimeCurrent() - last_license_check > 3600)
     {
         CheckLicense();
         if(!is_license_valid)
         {
-            Print("🛑 LICENSE EXPIRED/INVALID. Stopping trading.");
+            DebugPrint("🛑 LICENSE EXPIRED/INVALID. Stopping trading.");
             return;
         }
     }
 
     if(!is_license_valid) return;
 
-    // 1. Manage existing positions
+    // 2. Manage existing positions
     ManagePositions();
 
-    // 2. Poll for new signals
+    // 3. Poll for new signals
     if(TimeCurrent() - last_poll_time >= Poll_Interval)
     {
         PollForSignal();
@@ -142,12 +256,28 @@ void PollForSignal()
     char postData[], result[];
     string resultHeaders;
 
+    DebugPrint("Polling API: " + url);
+    
+    // IMPORTANT: Ensure URL is in allow list: Tools → Options → Expert Advisors[reference:1]
     int res = WebRequest("GET", url, headers, 5000, postData, result, resultHeaders);
 
     if(res == 200)
     {
+        DebugPrint("API response OK (200)");
         string response = CharArrayToString(result);
+        DebugPrint("Response length: " + IntegerToString(StringLen(response)));
         ProcessSignal(response);
+    }
+    else
+    {
+        int lastError = GetLastError();
+        DebugPrint("WebRequest failed. HTTP Code: " + IntegerToString(res) + 
+                  ", Error: " + ErrorDescription(lastError));
+        
+        if(lastError == 4014)
+        {
+            DebugPrint("⚠️ Add '" + API_URL + "' to: Tools → Options → Expert Advisors → Allow WebRequest for listed URL");
+        }
     }
 }
 
@@ -157,8 +287,11 @@ void PollForSignal()
 void ProcessSignal(string json)
 {
     // Basic JSON parsing (simplified for the example)
-    // In a real EA, we would use a robust JSON library
-    if(StringFind(json, "\"signalId\"") == -1) return;
+    if(StringFind(json, "\"signalId\"") == -1) 
+    {
+        DebugPrint("No signalId in JSON response");
+        return;
+    }
 
     SignalData sig;
     sig.id = GetJsonValue(json, "signalId");
@@ -167,14 +300,33 @@ void ProcessSignal(string json)
     sig.entry = StringToDouble(GetJsonValue(json, "entry"));
     sig.sl = StringToDouble(GetJsonValue(json, "sl"));
     sig.tp = StringToDouble(GetJsonValue(json, "tp"));
+    sig.tp2 = StringToDouble(GetJsonValue(json, "tp2"));
+    sig.tp3 = StringToDouble(GetJsonValue(json, "tp3"));
+    sig.tp4 = StringToDouble(GetJsonValue(json, "tp4"));
     sig.confidence = StringToDouble(GetJsonValue(json, "confidence"));
     sig.grade = GetJsonValue(json, "grade");
 
+    DebugPrint("Parsed Signal: " + sig.symbol + " " + sig.type + 
+              " Entry:" + DoubleToString(sig.entry, 2) +
+              " SL:" + DoubleToString(sig.sl, 2) +
+              " TP1:" + DoubleToString(sig.tp, 2) +
+              " TP2:" + DoubleToString(sig.tp2, 2) +
+              " TP3:" + DoubleToString(sig.tp3, 2) +
+              " TP4:" + DoubleToString(sig.tp4, 2));
+
     // Skip if it's the same signal we already processed
-    if(sig.id == last_signal_id && last_signal_id != "") return;
+    if(sig.id == last_signal_id && last_signal_id != "") 
+    {
+        DebugPrint("Duplicate signal ID: " + sig.id + " - skipping");
+        return;
+    }
     
     // Skip if not XAUUSD
-    if(sig.symbol != "XAUUSD") return;
+    if(sig.symbol != "XAUUSD") 
+    {
+        DebugPrint("Signal symbol mismatch: " + sig.symbol + " (expected XAUUSD)");
+        return;
+    }
 
     Print("📥 [MATCH] New Gold Signal: ", sig.type, " | ID: ", sig.id, " | Entry: ", sig.entry);
 
@@ -190,6 +342,10 @@ void ProcessSignal(string json)
     {
         ExecuteSplitTrade(sig);
     }
+    else
+    {
+        DebugPrint("CanTrade() returned false - signal not executed");
+    }
 }
 
 //+------------------------------------------------------------------+
@@ -197,6 +353,8 @@ void ProcessSignal(string json)
 //+------------------------------------------------------------------+
 bool CanTrade(SignalData &sig)
 {
+    DebugPrint("=== CanTrade() Validation ===");
+    
     // 0. Reset daily stats if new day
     datetime currentDay = iTime(_Symbol, PERIOD_D1, 0);
     if(currentDay != last_trade_day)
@@ -204,7 +362,8 @@ bool CanTrade(SignalData &sig)
         trades_today = 0;
         starting_balance_today = AccountInfoDouble(ACCOUNT_BALANCE);
         last_trade_day = currentDay;
-        Print("🌅 New Day Started. Resetting daily stats.");
+        DebugPrint("🌅 New Day Started. Resetting daily stats.");
+        DebugPrint("New starting balance: " + DoubleToString(starting_balance_today, 2));
     }
 
     // 1. Session Check (GMT)
@@ -214,23 +373,31 @@ bool CanTrade(SignalData &sig)
     bool isLondon = (gmt.hour >= London_Start && gmt.hour < London_End);
     bool isNY = (gmt.hour >= NY_Start && gmt.hour < NY_End);
     
+    DebugPrint("GMT Time: " + IntegerToString(gmt.hour) + ":" + IntegerToString(gmt.min));
+    DebugPrint("London Session: " + (isLondon ? "Open" : "Closed"));
+    DebugPrint("NY Session: " + (isNY ? "Open" : "Closed"));
+    
     if(!isLondon && !isNY)
     {
-        Print("❌ Outside trading sessions. London/NY only.");
+        DebugPrint("❌ Outside trading sessions. London/NY only.");
         return false;
     }
 
     // 2. Already open check
-    if(CountOpenPositions() > 0)
+    int openPositions = CountOpenPositions();
+    DebugPrint("Open positions: " + IntegerToString(openPositions));
+    if(openPositions > 0)
     {
-        Print("❌ Already have open positions. One signal at a time.");
+        DebugPrint("❌ Already have open positions. One signal at a time.");
         return false;
     }
 
     // 3. Daily Trade Limit Check
+    DebugPrint("Trades today: " + IntegerToString(trades_today) + 
+              " (Max: " + IntegerToString(Max_Trades_Per_Day) + ")");
     if(trades_today >= Max_Trades_Per_Day)
     {
-        Print("❌ Daily trade limit reached (", Max_Trades_Per_Day, ")");
+        DebugPrint("❌ Daily trade limit reached (" + IntegerToString(Max_Trades_Per_Day) + ")");
         return false;
     }
 
@@ -239,27 +406,47 @@ bool CanTrade(SignalData &sig)
     double dailyLoss = starting_balance_today - currentEquity;
     double maxLossAmount = starting_balance_today * (Max_Daily_Drawdown_Percent / 100.0);
     
+    DebugPrint("Daily Loss: " + DoubleToString(dailyLoss, 2) + 
+              " (Limit: " + DoubleToString(maxLossAmount, 2) + ")");
+    
     if(dailyLoss >= maxLossAmount)
     {
-        Print("❌ Daily drawdown limit reached (", Max_Daily_Drawdown_Percent, "%)");
+        DebugPrint("❌ Daily drawdown limit reached (" + DoubleToString(Max_Daily_Drawdown_Percent) + "%)");
         return false;
     }
 
     // 5. Margin Check
     double lotSize = CalculateTierLotSize();
-    double requiredMargin;
-    if(!OrderCalcMargin(sig.type == "BUY" ? ORDER_TYPE_BUY : ORDER_TYPE_SELL, _Symbol, lotSize * 2, SymbolInfoDouble(_Symbol, SYMBOL_ASK), requiredMargin))
-    {
-        Print("❌ Failed to calculate margin");
-        return false;
-    }
+    DebugPrint("Calculated lot size: " + DoubleToString(lotSize, 2));
     
-    if(requiredMargin > AccountInfoDouble(ACCOUNT_MARGIN_FREE))
+    if(lotSize <= 0)
     {
-        Print("❌ Insufficient free margin for 2 positions");
+        DebugPrint("❌ Invalid lot size calculated: " + DoubleToString(lotSize));
         return false;
     }
 
+    double requiredMargin = 0.0;
+    ENUM_ORDER_TYPE marginOrderType = (sig.type == "BUY") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+    double marginPrice = (sig.type == "BUY") ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) : SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    
+    if(!OrderCalcMargin(marginOrderType, _Symbol, lotSize * 2, marginPrice, requiredMargin))
+    {
+        int error = GetLastError();
+        DebugPrint("❌ Failed to calculate margin. Error: " + ErrorDescription(error));
+        return false;
+    }
+    
+    double freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+    DebugPrint("Required margin: " + DoubleToString(requiredMargin, 2) + 
+              ", Free margin: " + DoubleToString(freeMargin, 2));
+    
+    if(requiredMargin > freeMargin)
+    {
+        DebugPrint("❌ Insufficient free margin for 2 positions");
+        return false;
+    }
+
+    DebugPrint("✅ All trade conditions met");
     return true;
 }
 
@@ -269,6 +456,8 @@ bool CanTrade(SignalData &sig)
 double CalculateTierLotSize()
 {
     double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+    DebugPrint("CalculateTierLotSize() - Balance: " + DoubleToString(balance, 2));
+    
     double lotPerTrade = 0.01;
 
     if(balance < 500)       lotPerTrade = 0.01;
@@ -278,14 +467,15 @@ double CalculateTierLotSize()
     else 
     {
         // 2% Risk calculation for $5000+
-        // Simplified pip value for XAUUSD
         double riskAmount = balance * 0.02;
-        // In this specific tier rules, the prompt says "max 2% risk" or dynamic
-        // We'll stick to a safe 0.20 base or calculate based on SL
+        // Simplified pip value for XAUUSD (approx $10 per lot per pip)
+        // This is a simplification - adjust based on your risk management
         lotPerTrade = 0.20; // Default for scaling
+        DebugPrint("Tier 5000+ - Risk amount: " + DoubleToString(riskAmount, 2));
     }
 
-    return lotPerTrade;
+    DebugPrint("Calculated lot size: " + DoubleToString(lotPerTrade, 2));
+    return NormalizeDouble(lotPerTrade, 2);
 }
 
 //+------------------------------------------------------------------+
@@ -294,36 +484,41 @@ double CalculateTierLotSize()
 void ExecuteSplitTrade(SignalData &sig)
 {
     double lot = CalculateTierLotSize();
-    double tpDistance = MathAbs(sig.entry - sig.tp);
     
-    // Trade 1: Early Security (30-50% TP distance)
-    double tp1 = (sig.type == "BUY") ? sig.entry + (tpDistance * TP1_Ratio) : sig.entry - (tpDistance * TP1_Ratio);
-    
-    // Trade 2: Runner (Full TP)
-    double tp2 = sig.tp;
+    // Split into 4 parts
+    double splitLot = NormalizeDouble(lot / 4.0, 2);
+    if(splitLot < SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN)) splitLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
 
-    ENUM_ORDER_TYPE orderType = (sig.type == "BUY") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
     double price = (sig.type == "BUY") ? SymbolInfoDouble(_Symbol, SYMBOL_ASK) : SymbolInfoDouble(_Symbol, SYMBOL_BID);
-
-    Print("⚡ Executing Split Trades: Lot ", lot, " x 2");
-
-    // Open Trade 1
-    if(trade.Buy(lot, _Symbol, price, sig.sl, tp1, "T1:" + sig.id) || 
-       trade.Sell(lot, _Symbol, price, sig.sl, tp1, "T1:" + sig.id))
+    
+    // Validate entry price (within 10 pips of signal)
+    if(MathAbs(price - sig.entry) > 1.00) // 10 pips = $1.00 on XAUUSD
     {
-        // Open Trade 2
-        if(trade.Buy(lot, _Symbol, price, sig.sl, tp2, "T2:" + sig.id) ||
-           trade.Sell(lot, _Symbol, price, sig.sl, tp2, "T2:" + sig.id))
-        {
-            last_signal_id = sig.id;
-            current_signal_type = sig.type;
-            trades_today++;
-            Print("✅ Successfully opened 2 split positions for Signal ", sig.id, " (Trades today: ", trades_today, ")");
-            
-            // Broadcast open event
-            BroadcastTradeEvent("OPEN", price, lot * 2, sig.sl, sig.id);
-        }
+        Print("⚠️ Price deviated too much from signal entry. Price: ", price, " Signal Entry: ", sig.entry);
+        return;
     }
+
+    DebugPrint("Executing 4-Way Split Trade. Total Lot: " + DoubleToString(lot, 2) + " Split Lot: " + DoubleToString(splitLot, 2));
+
+    // Open 4 positions
+    if(sig.type == "BUY") {
+        trade.Buy(splitLot, _Symbol, price, sig.sl, sig.tp, "T1:" + sig.id);
+        trade.Buy(splitLot, _Symbol, price, sig.sl, sig.tp2, "T2:" + sig.id);
+        trade.Buy(splitLot, _Symbol, price, sig.sl, sig.tp3, "T3:" + sig.id);
+        trade.Buy(splitLot, _Symbol, price, sig.sl, sig.tp4, "T4:" + sig.id);
+    } else {
+        trade.Sell(splitLot, _Symbol, price, sig.sl, sig.tp, "T1:" + sig.id);
+        trade.Sell(splitLot, _Symbol, price, sig.sl, sig.tp2, "T2:" + sig.id);
+        trade.Sell(splitLot, _Symbol, price, sig.sl, sig.tp3, "T3:" + sig.id);
+        trade.Sell(splitLot, _Symbol, price, sig.sl, sig.tp4, "T4:" + sig.id);
+    }
+
+    last_signal_id = sig.id;
+    current_signal_type = sig.type;
+    trades_today++;
+    
+    DebugPrint("✅ Successfully opened 4 split positions for Signal " + sig.id);
+    BroadcastTradeEvent("OPEN", price, splitLot * 4, sig.sl, sig.id);
 }
 
 //+------------------------------------------------------------------+
@@ -331,38 +526,51 @@ void ExecuteSplitTrade(SignalData &sig)
 //+------------------------------------------------------------------+
 void ManagePositions()
 {
-    bool t1_active = false;
-    ulong t2_ticket = 0;
-    double t2_entry = 0;
-    double t2_sl = 0;
-    double t2_tp = 0;
-
-    // Scan positions
+    double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    
+    // Scan all open positions for this EA
     for(int i = PositionsTotal() - 1; i >= 0; i--)
     {
         if(pos.SelectByIndex(i))
         {
             if(pos.Magic() == Magic_Number)
             {
-                string comment = pos.Comment();
-                if(StringFind(comment, "T1") == 0) t1_active = true;
-                if(StringFind(comment, "T2") == 0) 
+                ulong ticket = pos.Ticket();
+                double entry = pos.PriceOpen();
+                double sl = pos.StopLoss();
+                double tp = pos.TakeProfit();
+                long type = pos.PositionType();
+
+                double profitPips = (type == POSITION_TYPE_BUY) ? (currentPrice - entry) : (entry - currentPrice);
+                profitPips = profitPips * 10.0; // Assume 0.10 = 1 pip for Gold
+
+                // 1. Profit-based Breakeven: Once 30 pips in profit reached
+                if(profitPips >= 30.0)
                 {
-                    t2_ticket = pos.Ticket();
-                    t2_entry = pos.PriceOpen();
-                    t2_sl = pos.StopLoss();
-                    t2_tp = pos.TakeProfit();
+                    bool alreadyBE = (type == POSITION_TYPE_BUY) ? (sl >= entry) : (sl <= entry);
+                    if(!alreadyBE)
+                    {
+                        if(trade.PositionModify(ticket, entry, tp))
+                        {
+                            DebugPrint("🛡️ Breakeven triggered (+30 pips): Ticket " + IntegerToString(ticket));
+                        }
+                    }
                 }
 
-                // Time-based safety: 120 minutes -> Move to BE
-                if(TimeCurrent() - pos.Time() > Safety_Close_Minutes * 60)
+                // 2. Trailing/Zone Protection: If close to TP, lock more profit
+                double tpDistance = MathAbs(tp - entry);
+                if(tpDistance > 0)
                 {
-                    if(pos.StopLoss() != pos.PriceOpen())
+                    double completion = MathAbs(currentPrice - entry) / tpDistance;
+                    if(completion >= 0.85)
                     {
-                        if(trade.PositionModify(pos.Ticket(), pos.PriceOpen(), pos.TakeProfit()))
+                        double secureSL = (type == POSITION_TYPE_BUY) ? entry + (tpDistance * 0.75) : entry - (tpDistance * 0.75);
+                        bool alreadySecured = (type == POSITION_TYPE_BUY) ? (sl >= secureSL) : (sl <= secureSL);
+                        
+                        if(!alreadySecured)
                         {
-                            Print("⏰ Safety rule: Moved Ticket ", pos.Ticket(), " to Breakeven (120 min limit)");
-                            BroadcastTradeEvent("MODIFY_SL", pos.PriceOpen(), pos.Volume(), pos.PriceOpen(), comment);
+                            trade.PositionModify(ticket, secureSL, tp);
+                            DebugPrint("🎯 Zone Protection (85% TP): Secured profit on Ticket " + IntegerToString(ticket));
                         }
                     }
                 }
@@ -370,49 +578,11 @@ void ManagePositions()
         }
     }
 
-    // BREAKEVEN LOGIC: If T1 is gone and T2 is still running, move T2 to BE+buffer
-    if(!t1_active && t2_ticket > 0)
+    // Auto-reset signal type if all closed
+    if(CountOpenPositions() == 0 && current_signal_type != "")
     {
-        double tpDistance = MathAbs(t2_entry - t2_tp);
-        double buffer = tpDistance * 0.25; // 25% buffer as per plan
-        double desiredBE = (current_signal_type == "BUY") ? t2_entry + buffer : t2_entry - buffer;
-
-        // Only modify if not already moved
-        if((current_signal_type == "BUY" && t2_sl < t2_entry) || (current_signal_type == "SELL" && t2_sl > t2_entry))
-        {
-             if(trade.PositionModify(t2_ticket, desiredBE, t2_tp))
-             {
-                 Print("🛡️ TP1 Secured: Moving T2 Ticket ", t2_ticket, " to BE + 25% Buffer");
-                 BroadcastTradeEvent("MODIFY_SL", t2_entry, activePositionVolume(t2_ticket), desiredBE, "T2_BE");
-             }
-        }
-        
-        // TP-ZONE PROTECTION: Tighten SL at 90% completion
-        double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID); // Bid for profit check
-        double completion = (MathAbs(currentPrice - t2_entry) / tpDistance);
-        
-        if(completion >= 0.90)
-        {
-            double secureSL = (current_signal_type == "BUY") ? t2_entry + (tpDistance * 0.85) : t2_entry - (tpDistance * 0.85);
-            if((current_signal_type == "BUY" && t2_sl < secureSL) || (current_signal_type == "SELL" && t2_sl > secureSL))
-            {
-                if(trade.PositionModify(t2_ticket, secureSL, t2_tp))
-                {
-                    Print("🎯 Zone Protection: Moved T2 SL to 85% TP to lock runner profit");
-                    BroadcastTradeEvent("MODIFY_SL", t2_entry, activePositionVolume(t2_ticket), secureSL, "ZONE_PROTECT");
-                }
-            }
-        }
-    }
-
-    // Reset current_signal_type if no positions left
-    if(CountOpenPositions() == 0)
-    {
-        if(current_signal_type != "")
-        {
-            Print("🏁 All positions closed. Waiting for next signal.");
-            current_signal_type = "";
-        }
+        current_signal_type = "";
+        DebugPrint("🏁 Sequence complete. System ready.");
     }
 }
 
@@ -421,6 +591,9 @@ void ManagePositions()
 //+------------------------------------------------------------------+
 void CloseAllTrades()
 {
+    DebugPrint("Closing all trades...");
+    int closedCount = 0;
+    
     for(int i = PositionsTotal() - 1; i >= 0; i--)
     {
         if(pos.SelectByIndex(i))
@@ -431,13 +604,27 @@ void CloseAllTrades()
                 double price = pos.PriceCurrent();
                 double vol = pos.Volume();
                 string comment = pos.Comment();
+                
+                DebugPrint("Closing ticket " + IntegerToString(ticket) + 
+                          " Comment: " + comment +
+                          " Volume: " + DoubleToString(vol, 2));
+                
                 if(trade.PositionClose(ticket))
                 {
+                    closedCount++;
                     BroadcastTradeEvent("CLOSE", price, vol, 0, comment);
+                }
+                else
+                {
+                    int error = GetLastError();
+                    DebugPrint("❌ Failed to close ticket " + IntegerToString(ticket) + 
+                              ". Error: " + ErrorDescription(error));
                 }
             }
         }
     }
+    
+    DebugPrint("Closed " + IntegerToString(closedCount) + " positions");
 }
 
 //+------------------------------------------------------------------+
@@ -508,6 +695,8 @@ void CheckLicense()
     char postData[], result[];
     string resultHeaders;
     
+    DebugPrint("Checking license: " + url);
+    
     int res = WebRequest("GET", url, headers, 5000, postData, result, resultHeaders);
     
     if(res == 200)
@@ -516,41 +705,50 @@ void CheckLicense()
         string success = GetJsonValue(json, "success");
         string message = GetJsonValue(json, "message");
         
+        DebugPrint("License response: " + json);
+        
         if(success == "true")
         {
             is_license_valid = true;
             string expires = GetJsonValue(json, "expiresAt");
-            // Basic date parsing or just display the string
             license_status_msg = StringSubstr(expires, 0, 10);
-            Print("✅ License Verification: VALID (Expires: ", license_status_msg, ")");
+            DebugPrint("✅ License Verification: VALID (Expires: " + license_status_msg + ")");
         }
         else
         {
             is_license_valid = false;
             license_status_msg = message;
-            Print("❌ License Verification: FAILED (", message, ")");
+            DebugPrint("❌ License Verification: FAILED (" + message + ")");
         }
     }
     else
     {
-        // Network error - be lenient? Or strict? 
-        // For security, usually strict, but for reliability, maybe allow if previously valid.
-        // Here we'll just log it. If it was valid before, we keep it valid for now until next check.
+        int lastError = GetLastError();
+        DebugPrint("⚠️ License Check Failed: HTTP " + IntegerToString(res) + 
+                  ", Error: " + ErrorDescription(lastError));
+        
+        // If network error but previously valid, keep valid for now
         if(!is_license_valid)
         {
             license_status_msg = "Network Error " + IntegerToString(res);
-            Print("⚠️ License Check Failed: Network Error ", res);
         }
     }
     
     last_license_check = TimeCurrent();
 }
+
 //+------------------------------------------------------------------+
 //| Get volume of an active position                                 |
 //+------------------------------------------------------------------+
 double activePositionVolume(ulong ticket)
 {
-    if(PositionSelectByTicket(ticket)) return PositionGetDouble(POSITION_VOLUME);
+    if(PositionSelectByTicket(ticket)) 
+    {
+        double volume = PositionGetDouble(POSITION_VOLUME);
+        DebugPrint("Volume for ticket " + IntegerToString(ticket) + ": " + DoubleToString(volume, 2));
+        return volume;
+    }
+    DebugPrint("Failed to select position with ticket: " + IntegerToString(ticket));
     return 0;
 }
 
@@ -559,6 +757,8 @@ double activePositionVolume(ulong ticket)
 //+------------------------------------------------------------------+
 void BroadcastTradeEvent(string operation, double price, double lots, double sl, string signalId)
 {
+    if(!Enable_Debug_Mode) return;
+    
     string url = API_URL + "/copier/master/trade";
     
     string json = "{";
@@ -578,7 +778,18 @@ void BroadcastTradeEvent(string operation, double price, double lots, double sl,
     string resultHeaders;
     string headers = "Content-Type: application/json\r\n";
     
+    DebugPrint("Broadcasting trade event: " + operation + " for " + signalId);
+    
     int res = WebRequest("POST", url, headers, 5000, postData, result, resultHeaders);
-    if(res != 200) Print("⚠️ Copier Broadcast Failed: HTTP ", res);
+    if(res != 200) 
+    {
+        int lastError = GetLastError();
+        DebugPrint("⚠️ Copier Broadcast Failed: HTTP " + IntegerToString(res) + 
+                  ", Error: " + ErrorDescription(lastError));
+    }
+    else
+    {
+        DebugPrint("✅ Copier broadcast successful");
+    }
 }
 //+------------------------------------------------------------------+

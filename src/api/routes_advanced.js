@@ -45,7 +45,7 @@ const validateBridgeToken = (req, res, next) => {
  */
 router.post('/signals', async (req, res) => {
     try {
-        const { symbol, type, entry, sl, tp, timeframe, confidence } = req.body;
+        const { symbol, type, entry, sl, tp, tp2, tp3, tp4, timeframe, confidence } = req.body;
 
         if (!symbol || !type || !entry) {
             return res.status(400).json({ error: 'Missing signal data' });
@@ -71,7 +71,7 @@ router.post('/signals', async (req, res) => {
 
         // Save signal
         const signalRef = await db.collection('signals').add({
-            symbol, type, entry, sl, tp, timeframe, confidence, qualityScore,
+            symbol, type, entry, sl, tp, tp2, tp3, tp4, timeframe, confidence, qualityScore,
             createdAt: new Date(),
             status: 'active'
         });
@@ -84,7 +84,7 @@ router.post('/signals', async (req, res) => {
             status: 'monitoring',
             addedAt: new Date(),
             signalData: {
-                symbol, type, entry, sl, tp, timeframe, confidence, qualityScore
+                symbol, type, entry, sl, tp, tp2, tp3, tp4, timeframe, confidence, qualityScore
             }
         });
 
@@ -131,6 +131,9 @@ router.get('/watchlist', forceMasterUser, async (req, res) => {
                 entry: data.signalData.entry,
                 sl: data.signalData.sl,
                 tp: data.signalData.tp,
+                tp2: data.signalData.tp2,
+                tp3: data.signalData.tp3,
+                tp4: data.signalData.tp4,
                 confidence: data.signalData.confidence,
                 grade: data.signalData.grade || 'A'
             };
@@ -173,11 +176,16 @@ router.post('/watchlist/update', forceMasterUser, async (req, res) => {
             return res.status(404).json({ error: 'Setup not found' });
         }
 
-        await snapshot.docs[0].ref.update({
+        const updateData = {
             status,
-            ticket,
             executedAt: new Date()
-        });
+        };
+
+        if (ticket !== undefined) {
+            updateData.ticket = ticket;
+        }
+
+        await snapshot.docs[0].ref.update(updateData);
 
         res.json({ success: true });
 
